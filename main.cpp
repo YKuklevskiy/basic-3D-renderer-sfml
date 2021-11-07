@@ -1,9 +1,15 @@
 #include <iostream>
+#include <iomanip>
 #include <SFML/Graphics.hpp>
 #include "mesh.h"
 #include "matrix.h"
 #include "consts.h"
 #include "math.h"
+#include "camera.h"
+#include "light.h"
+#include "directionLight.h"
+
+#include "amfunctions.h"
 
 ///		<summary>
 ///		The (0, 0) point is set to be in the center of screen!
@@ -14,6 +20,8 @@
 Mesh cubeMesh; // temporary
 Matrix projectionMatrix(4, 4);
 sf::Clock* c = nullptr; // clock from the program initialization
+Camera mainCamera;
+std::vector<Light*> lightSources;
 
 /// <summary>
 /// Recalculates projection matrix for a view of requested width and height
@@ -37,6 +45,25 @@ void calculateProjectionMatrix(int windowWidth, int windowHeight)
 	projectionMatrix.printMatrix();
 #endif // NDEBUG
 }
+
+/// <summary>
+/// Calculate luminance from all the light sources
+/// </summary>
+/// <param name="normal">Normal vector of the triangle that is illuminated</param>
+/// <returns>Resulting luminance</returns>
+float calculateLuminance(Vector3d normal)
+{
+	float lum = 0.0f;
+	for (int i = 0; i < lightSources.size(); i++)
+	{
+		float res = lightSources[i]->calculateLuminance(normal);
+		if (res > 0.0f)
+			lum += res;
+	}
+	if (lum >= 1.0f) return 1.0f;
+	return lum;
+}
+
 
 /// <summary>
 /// Returns a vector projected on 2D view (only x and y coordinates are valid). 
@@ -134,11 +161,22 @@ void DrawTriangle(sf::RenderWindow& window, Triangle projectedTriangle)
 /// </summary>
 /// <param name="window">Renderer</param>
 /// <param name="projectedTriangle">The drawn triangle</param>
-void FillTriangle(sf::RenderWindow& window, Triangle projectedTriangle)
+void FillTriangle(sf::RenderWindow& window, Triangle projectedTriangle, float luminance)
 {
-	sf::ConvexShape triangle; 
+	// safe measures
+	if (luminance > 1.0f)
+		luminance = 1.0f;
+	if (luminance < 0.0f)
+		luminance = 0.0f;
+
+	sf::Color fillColor = sf::Color::Green;
+	fillColor.r *= luminance;
+	fillColor.g *= luminance;
+	fillColor.b *= luminance;
+
+	sf::ConvexShape triangle;
 	triangle.setPointCount(3);
-	triangle.setFillColor(sf::Color::Green);
+	triangle.setFillColor(fillColor);
 	triangle.setOutlineColor(sf::Color::Transparent);
 
 	unsigned int offsetX = window.getSize().x / 2, offsetY = window.getSize().y / 2;
@@ -175,13 +213,23 @@ void DrawMesh(sf::RenderWindow& window, Mesh mesh, bool wireframed = false)
 		}
 		projectedTriangle.translate(0.0f, 0.0f, 2.0f); // temporary, for test cube
 
+		// Don't draw triangle if can't see it
+		Vector3d normal = (projectedTriangle[2] - projectedTriangle[0]) * 
+						  (projectedTriangle[1] - projectedTriangle[0]);
+		normal.normalize();
+
+		Vector3d rayToCamera = projectedTriangle[0] - mainCamera.getPosition();
+		rayToCamera.normalize();
+
+		if (normal / rayToCamera < 0.0f) continue;
+
 		for (int i = 0; i < 3; i++)
 			projectedTriangle[i] = projectVector(projectedTriangle[i]);
 
 		// Scale to the size of a window
 		projectedTriangle.scaleXY(0.5f * window.getSize().x, 0.5f * window.getSize().y);
 		// Draw Triangle
-		FillTriangle(window, projectedTriangle);
+		FillTriangle(window, projectedTriangle, calculateLuminance(normal));
 		
 		// Draw wireframe
 		DrawTriangle(window, projectedTriangle);
@@ -229,6 +277,9 @@ void init()
 
 	c = new sf::Clock();
 
+	lightSources.push_back(new DirectionLight({0, 0, 1}));
+	lightSources.push_back(new DirectionLight({ 0, 1, 0 }));
+
 }
 
 int main()
@@ -236,7 +287,7 @@ int main()
 	init();
 	
     sf::ContextSettings settings;
-    settings.antialiasingLevel = 4;
+    settings.antialiasingLevel = 1;
     sf::RenderWindow window(sf::VideoMode(SCREEN_WIDTH, SCREEN_HEIGHT), 
 		"3DRenderer", sf::Style::Default, settings);
 
