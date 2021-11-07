@@ -6,7 +6,6 @@ struct Vector3d
 	Vector3d(float x = 0.0f, float y = 0.0f, float z = 0.0f);
 	
 	Vector3d operator +(Vector3d v);
-	
 	Vector3d operator -(Vector3d v);
 	
 	// Dividing by constant
@@ -21,11 +20,13 @@ struct Vector3d
 	// Cross Product
 	Vector3d operator *(Vector3d v);
 
+	// Multiplication by matrix
 	Vector3d operator *(Matrix m);
 	
 	// Normalizes vector, returns copy of normalized vector
 	Vector3d normalize();
 
+	// Prints vector in the console
 	void printVector();
 };
 

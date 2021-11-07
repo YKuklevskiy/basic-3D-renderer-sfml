@@ -5,14 +5,21 @@
 #include "consts.h"
 #include "math.h"
 
-/// <summary>
-/// The (0, 0) point is set to be in the center of screen!
-/// </summary>
-
-Mesh cubeMesh;
-
+///		<summary>
+///		The (0, 0) point is set to be in the center of screen!
+///		</summary>
+///
+///		Global variables
+/// 
+Mesh cubeMesh; // temporary
 Matrix projectionMatrix(4, 4);
+sf::Clock* c = nullptr; // clock from the program initialization
 
+/// <summary>
+/// Recalculates projection matrix for a view of requested width and height
+/// </summary>
+/// <param name="windowWidth">View width</param>
+/// <param name="windowHeight">View height</param>
 void calculateProjectionMatrix(int windowWidth, int windowHeight)
 {
 	float aspectRatio = (float)windowHeight / (float)windowWidth;
@@ -26,9 +33,17 @@ void calculateProjectionMatrix(int windowWidth, int windowHeight)
 	projectionMatrix[2][3] = 1.0f;
 	projectionMatrix[3][2] = -1.0f * zScaleFactor * Z_NEAR_PLANE;
 
+#ifndef NDEBUG
 	projectionMatrix.printMatrix();
+#endif // NDEBUG
 }
 
+/// <summary>
+/// Returns a vector projected on 2D view (only x and y coordinates are valid). 
+/// Uses global variable projectionMatrix.
+/// </summary>
+/// <param name="v">Vector that we project</param>
+/// <returns>Projected vector</returns>
 Vector3d projectVector(Vector3d& v)
 {
 	Matrix temp(1, 4);
@@ -37,7 +52,7 @@ Vector3d projectVector(Vector3d& v)
 	temp[0][2] = v.z;
 	temp[0][3] = 1.0f;
 	
-	temp = Matrix(temp * projectionMatrix);
+	temp = temp * projectionMatrix; // resulting matrix will be of the same size
 
 	Vector3d res(temp[0][0], temp[0][1], temp[0][2]);
 	if (temp[0][3] != 0.0f)
@@ -48,7 +63,6 @@ Vector3d projectVector(Vector3d& v)
 	return res;
 }
 
-sf::Clock* c = nullptr;
 
 /// <summary>
 /// Creates a 3d space rotation matrix which produces rotation by corresponding angles
@@ -59,16 +73,12 @@ sf::Clock* c = nullptr;
 /// <returns>Resulting rotation matrix (3x3)</returns>
 Matrix createRotationMatrix(float xAngle, float yAngle, float zAngle)
 {
-
 	Matrix rotX(3, 3);
 	rotX[0][0] = 1.0f;
 	rotX[1][1] = cosf(xAngle);
 	rotX[1][2] = -sinf(xAngle);
 	rotX[2][1] = sinf(xAngle);
 	rotX[2][2] = cosf(xAngle);
-
-	//std::cout << "rotX:\n";
-	//rotX.printMatrix();
 
 	Matrix rotY(3, 3);
 	rotY[0][0] = cosf(xAngle);
@@ -77,9 +87,6 @@ Matrix createRotationMatrix(float xAngle, float yAngle, float zAngle)
 	rotY[2][0] = -sinf(xAngle);
 	rotY[2][2] = cosf(xAngle);
 
-	//std::cout << "rotY:\n";
-	//rotY.printMatrix();
-
 	Matrix rotZ(3, 3);
 	rotZ[0][0] = cosf(xAngle);
 	rotZ[1][1] = cosf(xAngle);
@@ -87,34 +94,46 @@ Matrix createRotationMatrix(float xAngle, float yAngle, float zAngle)
 	rotZ[1][0] = sinf(xAngle);
 	rotZ[2][2] = 1.0f;
 
-	//std::cout << "rotZ:\n";
-	//rotZ.printMatrix();
-
 	return rotX * rotY * rotZ;
 }
 
+/// <summary>
+/// Draws a line from v1 to v2 (in 2D space) using RenderWindow.
+/// </summary>
+/// <param name="window">Renderer</param>
+/// <param name="v1">Line beginning point (2D)</param>
+/// <param name="v2">Line end point (2D)</param>
+/// <param name="color">Line color</param>
 void DrawLine(sf::RenderWindow& window, Vector3d v1, Vector3d v2, sf::Color color)
 { 
+	// Center of the window is the (0, 0) point so offset vectors by half the window size
 	unsigned int offsetX = window.getSize().x / 2, offsetY = window.getSize().y / 2;
 	sf::Vertex line[] = {
 		sf::Vertex(sf::Vector2f(v1.x + offsetX, v1.y + offsetY)),
 		sf::Vertex(sf::Vector2f(v2.x + offsetX, v2.y + offsetY))
-		/*sf::Vertex(sf::Vector2f(v1.x, v1.y)),
-		sf::Vertex(sf::Vector2f(v2.x, v2.y))*/
 	};
 	line->color = color;
 	window.draw(line, 2, sf::Lines);
 }
 
+/// <summary>
+/// Draws triangle wireframe.
+/// </summary>
+/// <param name="window">Renderer</param>
+/// <param name="projectedTriangle">The drawn triangle</param>
 void DrawTriangle(sf::RenderWindow& window, Triangle projectedTriangle)
 {
-	sf::Color color = sf::Color::Red;
-	// Все 3 вызова рисуют одно и то же
+	sf::Color color = sf::Color::White;
 	DrawLine(window, projectedTriangle[0], projectedTriangle[1], color);
 	DrawLine(window, projectedTriangle[1], projectedTriangle[2], color);
 	DrawLine(window, projectedTriangle[0], projectedTriangle[2], color);
 }
 
+/// <summary>
+/// Draws a filled triangle.
+/// </summary>
+/// <param name="window">Renderer</param>
+/// <param name="projectedTriangle">The drawn triangle</param>
 void FillTriangle(sf::RenderWindow& window, Triangle projectedTriangle)
 {
 	sf::ConvexShape triangle; 
@@ -132,39 +151,51 @@ void FillTriangle(sf::RenderWindow& window, Triangle projectedTriangle)
 
 	window.draw(triangle);
 }
-
-void DrawMesh(sf::RenderWindow& window, Mesh mesh)
+ 
+/// <summary>
+/// Draws a mesh of triangles
+/// </summary>
+/// <param name="window"></param>
+/// <param name="mesh"></param>
+/// <param name="wireframed">If true, additionally draws a wireframe of a triangle</param>
+void DrawMesh(sf::RenderWindow& window, Mesh mesh, bool wireframed = false)
 {
 	for (int i = 0; i < mesh.tris.size(); i++)
 	{
 		// Project triangle, then draw it
 		Triangle projectedTriangle = mesh.tris[i];
-		projectedTriangle.translate(-0.5f, -0.5f, -0.5f);
-		if (c) // Rotation
+		projectedTriangle.translate(-0.5f, -0.5f, -0.5f); // temporary, for test cube
+		if (c) // Rotation // temporary, for test cube
 		{
 			float fElapsedTime = c->getElapsedTime().asSeconds();
 			Matrix rotMat = createRotationMatrix(fElapsedTime, 0.0f, fElapsedTime * 0.5f);
 			//rotMat.printMatrix();
 			for (int i = 0; i < 3; i++)
-				projectedTriangle.vertices[i] = projectedTriangle.vertices[i] * rotMat;
+				projectedTriangle[i] = projectedTriangle[i] * rotMat;
 		}
-		//projectedTriangle[0].printVector();
-		projectedTriangle.scaleXY(0.5f * window.getSize().x, 0.5f * window.getSize().y);
-		projectedTriangle.translate(0.0f, 0.0f, 3.0f);
+		projectedTriangle.translate(0.0f, 0.0f, 2.0f); // temporary, for test cube
 
 		for (int i = 0; i < 3; i++)
-			projectedTriangle.vertices[i] = projectVector(projectedTriangle.vertices[i]);
+			projectedTriangle[i] = projectVector(projectedTriangle[i]);
 
+		// Scale to the size of a window
+		projectedTriangle.scaleXY(0.5f * window.getSize().x, 0.5f * window.getSize().y);
 		// Draw Triangle
-		//FillTriangle(window, projectedTriangle);
-
+		FillTriangle(window, projectedTriangle);
+		
 		// Draw wireframe
 		DrawTriangle(window, projectedTriangle);
 	}
 }
 
+/// <summary>
+/// Initializes everything in the beginning of the program.
+/// </summary>
 void init()
 {
+	
+	std::ios::sync_with_stdio(0);
+
 	cubeMesh.tris =
 	{
 
@@ -206,8 +237,15 @@ int main()
 	
     sf::ContextSettings settings;
     settings.antialiasingLevel = 4;
-    sf::RenderWindow window(sf::VideoMode(SCREEN_WIDTH, SCREEN_HEIGHT), "3DRenderer", sf::Style::Default, settings);
+    sf::RenderWindow window(sf::VideoMode(SCREEN_WIDTH, SCREEN_HEIGHT), 
+		"3DRenderer", sf::Style::Default, settings);
+
+#ifdef NDEBUG
 	window.setFramerateLimit(60);
+#else
+	window.setFramerateLimit(30);
+#endif // NDEBUG
+
 	while (window.isOpen())
     {
         sf::Event event;
@@ -216,9 +254,15 @@ int main()
             if (event.type == sf::Event::Closed)
                 window.close();
 			if (event.type == sf::Event::Resized)
+			{
+				// recalculate projection matrix
 				calculateProjectionMatrix(window.getSize().x, window.getSize().y);
-        }
-
+				
+				// reset the window view
+				sf::FloatRect newViewRect = sf::FloatRect(0, 0, window.getSize().x, window.getSize().y);
+				window.setView(sf::View(newViewRect));
+			}
+		}
         window.clear();
 
 		DrawMesh(window, cubeMesh);

@@ -72,6 +72,14 @@ void Matrix::fill(float f)
 			mat[i][j] = f;
 }
 
+Matrix Matrix::getIdentityMatrix(int size)
+{
+	Matrix res(size, size);
+	for (int i = 0; i < size; i++)
+		mat[i][i] = 1.0f;
+	return res;
+}
+
 std::vector<float>& Matrix::operator[](int i)
 {
 	if (i < 0 || i >= size.first)

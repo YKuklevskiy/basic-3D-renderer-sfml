@@ -2,8 +2,6 @@
 #include "amfunctions.h"
 #include <iostream>
 
-// TODO Inherit this class from Matrix class
-
 Vector3d::Vector3d(float x, float y, float z) 
 	: x(x), y(y), z(z) { }
 
@@ -25,7 +23,7 @@ Vector3d Vector3d::operator-(Vector3d v)
 
 Vector3d Vector3d::operator/(float s)
 {
-	s = 1 / s; // multiplying 3 times is faster than dividing 3 times
+	s = 1 / s;
 	return Vector3d(x * s, y * s, z * s);
 }
 

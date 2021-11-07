@@ -1,5 +1,5 @@
 #include "triangle.h"
-#include <exception>
+#include <iostream>
 
 Triangle::Triangle(Vector3d p1, Vector3d p2, Vector3d p3) 
 	: vertices{ p1, p2, p3 } { }
@@ -10,7 +10,10 @@ Triangle::Triangle(Vector3d vertices[3])
 Vector3d& Triangle::operator[](int i)
 {
 	if (i < 0 || i > 2)
-		throw std::exception("Index out of range");
+	{
+		std::cerr << "Index out of range: triangle vertice index must be in range [0, 2]\n";
+		return vertices[0];
+	}
 
 	return vertices[i];
 }
